@@ -399,17 +399,35 @@
     # chat-completions endpoint, so it takes its own base-URL override. Fetch stays
     # disabled and no fetch provider is mounted: that provider defers SSRF
     # protection and the model would choose the request target. Search is a full
-    # auxiliary model request with server-side retrieval, so this shipped DeepSeek
-    # route gets 60s while the provider-neutral tool default remains 30s.
+    # auxiliary model request with server-side retrieval, so the selected route
+    # gets 60s while the provider-neutral tool default remains 30s.
+    #
+    # Both search providers are mounted and `searchProvider` pins which one wins.
+    # The seam holds a map keyed by provider id and resolves the selection at
+    # execution time, never by mount order, so adding a route beside the shipped
+    # one changes nothing until this field names it. Serper is pinned because this
+    # deployment wants retrieval that does not spend the chat credential per
+    # search; the DeepSeek route stays registered and usable, and falling back to
+    # it is `$DSH_WEB_SEARCH_PROVIDER=deepseek-official` — documented as feeding
+    # this same field rather than a hidden priority chain — with no edit here.
+    #
+    # Replacing the shipped row instead of adding beside it was the earlier shape.
+    # It cost that fallback, deleted the rationale above, and put this overlay in
+    # direct conflict with every upstream change to the DeepSeek route.
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        searchProvider: serper
 
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
+
+    - id: web-search-serper
+      name: '@deepseek-ai/dsh-web-search-serper'
+      config:
+        apiKeyEnv: SERPER_API_KEY
 
     - id: tool-web
       name: '@deepseek-ai/dsh-tool-web'
