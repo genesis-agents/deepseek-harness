@@ -294,6 +294,11 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
+    # Files / Tasks / Waterfall: the three read-only session views, ours
+    # rather than upstream's, registering into the same conversation view ring.
+    - id: ui-session-views
+      name: '@deepseek-ai/dsh-client-ui-session-views'
+
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
 # Every row below composes what ONE agent contributes to the host registries:

@@ -1,0 +1,563 @@
+/* Waterfall view: header chrome + one scrolling plot over a SHARED time axis.
+ * Bar geometry is a percentage of the session domain (`--waterfall-bar-offset`
+ * / `--waterfall-bar-width`, written by the view), never a pixel: the track has
+ * no measured width, so a resize re-lays the whole plot out with zero JS and a
+ * bar stays comparable to every other bar on screen.
+ * The four gridline intervals below (`background-size: 25%`) and the five axis
+ * ticks the header draws are the same quarter split — WATERFALL_TICKS in the
+ * tsx is the one place that count is chosen, and changing it means changing
+ * that `background-size` too. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+/* Header ---------------------------------------------------------------- */
+
+.header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  padding: 16px 16px 10px;
+  gap: 6px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.headerTop {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+
+.title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The window badge is a claim about provenance, so it sits beside the title
+   rather than in the figure strip, where it would read as one more metric. */
+.windowPill {
+  flex: none;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 0;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* Window figures and whole-log figures fold different amounts of history, so
+   the separator is the only thing they share; never sum across it. */
+.sep {
+  color: var(--dsw-alias-label-caption);
+}
+
+.warn {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* Legend ---------------------------------------------------------------- */
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: 2px 0 0;
+  padding: 0;
+  gap: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxxs-11);
+  list-style: none;
+}
+
+.legendItem {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+}
+
+.legendSwatch {
+  flex: none;
+  width: 14px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--waterfall-span-color, var(--dsw-alias-label-secondary));
+}
+
+.legendSwatch[data-kind='turn'] {
+  --waterfall-span-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+.legendSwatch[data-kind='step'] {
+  --waterfall-span-color: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 52%,
+    var(--dsw-alias-label-tertiary)
+  );
+}
+
+.legendSwatch[data-kind='tool'] {
+  --waterfall-span-color: var(--dsw-alias-state-warn-label);
+}
+
+/* The running swatch repeats the bar fade so the legend explains the gradient
+   rather than restating a colour the reader can already see. */
+.legendSwatch[data-state='running'] {
+  --waterfall-span-color: var(--dsw-alias-label-secondary);
+
+  background: linear-gradient(
+    90deg,
+    var(--waterfall-span-color),
+    color-mix(in srgb, var(--waterfall-span-color) 10%, transparent)
+  );
+}
+
+.legendSwatch[data-state='truncated'] {
+  --waterfall-span-color: var(--dsw-alias-label-secondary);
+
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    color-mix(in srgb, var(--dsw-alias-bg-layer-1) 62%, transparent) 3px 6px
+  );
+}
+
+/* Plot ------------------------------------------------------------------ */
+
+.plot {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* The composer floats over this view (the root opts in with
+     data-conversation-composer-overlay), so the last row needs its height back. */
+  padding-bottom: calc(var(--dsh-composer-height, 0px) + 16px);
+  container: waterfall-plot / inline-size;
+}
+
+.table {
+  width: 100%;
+  min-width: 0;
+  border-spacing: 0;
+  table-layout: fixed;
+  font: var(--dsw-font-xxs-12);
+}
+
+.spanColumn {
+  width: 216px;
+}
+
+.startColumn {
+  width: 76px;
+}
+
+.durationColumn {
+  width: 84px;
+}
+
+.table th,
+.table td {
+  box-sizing: border-box;
+  padding: 0 8px;
+  text-align: left;
+}
+
+.table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 30px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-layer-1);
+  font: var(--dsw-font-xxs-12);
+  font-weight: 500;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* The two figure columns are read against their right edge, so their headings
+   sit over the digits rather than over the gutter left of them. */
+.table thead th.numericHead {
+  text-align: right;
+}
+
+/* Axis ------------------------------------------------------------------ */
+
+/* The axis and every track must share one content box, or the ticks would
+   label the wrong gridlines; both sides state the same inset. */
+.table thead th.axisHead,
+.table tbody td.trackCell {
+  padding: 0 12px 0 8px;
+}
+
+.axis {
+  position: relative;
+  display: block;
+  height: 100%;
+}
+
+.tick {
+  position: absolute;
+  top: 50%;
+  left: var(--waterfall-tick-left);
+  transform: translate(-50%, -50%);
+  color: var(--dsw-alias-label-caption);
+  font: 9px/12px var(--ds-font-family-code);
+  white-space: nowrap;
+}
+
+/* The outer two ticks would hang past the plot if they stayed centred. */
+.tick[data-edge='start'] {
+  transform: translate(0, -50%);
+}
+
+.tick[data-edge='end'] {
+  transform: translate(-100%, -50%);
+}
+
+/* Rows ------------------------------------------------------------------ */
+
+/* Denser than the 30px table rhythm on purpose: a waterfall is judged by how
+   many spans fit on one screen, and 24px still clears the 16px chevron. */
+.table tbody th,
+.table tbody td {
+  height: 24px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.table tbody tr {
+  --waterfall-span-color: var(--dsw-alias-label-secondary);
+
+  /* A row is a target, not prose to sweep, so it keeps the arrow instead of the
+     I-beam `auto` puts over the label text. */
+  cursor: default;
+  /* A real outline on a <tr> is clipped by the `overflow: hidden` the cells
+     need for their ellipses; the inset shadow below paints inside the row box
+     instead, and reads as a ring on every side. */
+  outline: none;
+  transition: background-color 120ms var(--ds-ease-in-out);
+}
+
+/* Focus and selection are different treatments on purpose — a ring for where
+   the keyboard is, a fill for what the reader picked — so a row can carry both
+   at once without either one impersonating the other. */
+.table tbody tr:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-business-primary);
+}
+
+/* Two accents only: brand owns turn identity (and its steps, mixed down toward
+   the label ramp), warn owns tool calls, error overrides both. */
+.table tbody tr[data-kind='turn'] {
+  --waterfall-span-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+.table tbody tr[data-kind='step'] {
+  --waterfall-span-color: color-mix(
+    in srgb,
+    var(--dsw-alias-brand-primary-new-colorprimary-new-color) 52%,
+    var(--dsw-alias-label-tertiary)
+  );
+}
+
+.table tbody tr[data-kind='tool'] {
+  --waterfall-span-color: var(--dsw-alias-state-warn-label);
+}
+
+.table tbody tr[data-kind='tool'][data-nested='true'] {
+  --waterfall-span-color: color-mix(
+    in srgb,
+    var(--dsw-alias-state-warn-label) 62%,
+    var(--dsw-alias-label-tertiary)
+  );
+}
+
+.table tbody tr[data-failed='true'] {
+  --waterfall-span-color: var(--dsw-alias-state-error-primary);
+}
+
+.table tbody tr:not([data-selected='true']):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.table tbody tr[data-selected='true'] {
+  background: var(--dsw-alias-interactive-bg-active);
+}
+
+/* Turn identity rail, drawn inside the label cell so it costs no layout. */
+.table tbody tr[data-kind='turn'] th.spanCell {
+  box-shadow: inset 2px 0 0 var(--waterfall-span-color);
+}
+
+.spanCell {
+  font-weight: 400;
+}
+
+.spanInner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 100%;
+  padding-left: calc(var(--waterfall-depth) * 13px);
+  gap: 5px;
+}
+
+.toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms var(--ds-ease-in-out);
+}
+
+.toggle:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.toggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+/* Keeps step and tool labels on the chevron text column. */
+.togglePlaceholder {
+  flex: none;
+  width: 16px;
+}
+
+.spanLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table tbody tr[data-kind='tool'] .spanLabel {
+  color: var(--dsw-alias-label-secondary);
+  font: 11px/16px var(--ds-font-family-code);
+}
+
+.stateDot {
+  flex: none;
+}
+
+.warnIcon {
+  flex: none;
+  color: var(--dsw-alias-state-warn-label);
+}
+
+/* Track ----------------------------------------------------------------- */
+
+.track {
+  position: relative;
+  height: 10px;
+  border-radius: 2px;
+  background-color: var(--dsw-alias-bg-layer-2);
+  /* Gridlines, not decoration: without them a bar length is unreadable in
+     absolute terms. One line per quarter, matching the header ticks. */
+  background-image: linear-gradient(
+    to right,
+    var(--dsw-alias-border-l1) 1px,
+    transparent 1px
+  );
+  background-size: 25% 100%;
+}
+
+.bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--waterfall-bar-offset);
+  width: var(--waterfall-bar-width);
+  /* A zero-length span is real data (an instant tool return), so it keeps a
+     visible mark instead of collapsing to nothing. */
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--waterfall-span-color);
+}
+
+/* Open span: the fade says "no end event yet", which a flat bar clipped at the
+   domain edge would silently misreport as a finished span. */
+.table tbody tr[data-open='true'] .bar {
+  background: linear-gradient(
+    90deg,
+    var(--waterfall-span-color),
+    color-mix(in srgb, var(--waterfall-span-color) 10%, transparent)
+  );
+}
+
+/* Window truncation is not the agent behaving oddly: the boundary event fell
+   outside the loaded window, so the bar hatches to disown its own edge.
+   The hatch is an overlay, not a background-image swap: a span can be open AND
+   truncated at once (a paged-out step whose tool is still live), and setting
+   background-image here would replace the open rule's gradient over a base the
+   `background` shorthand had already cleared to transparent — hatch stripes on
+   nothing, i.e. an invisible bar. */
+.table tbody tr[data-truncated='true'] .bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    color-mix(in srgb, var(--dsw-alias-bg-layer-1) 62%, transparent) 3px 6px
+  );
+}
+
+.table tbody tr[data-instant='true'] .bar {
+  min-width: 3px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--waterfall-span-color) 40%, transparent);
+}
+
+/* Start offset and duration are the same kind of figure and are compared down
+   the column, so they share one treatment rather than drifting apart. */
+.startCell,
+.durationCell {
+  color: var(--dsw-alias-label-tertiary);
+  font: 11px/16px var(--ds-font-family-code);
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* The offset is a reading off the axis the bar already draws, so it stays a
+   rank quieter than the duration it sits beside. */
+.startCell {
+  color: var(--dsw-alias-label-caption);
+}
+
+/* Empty ----------------------------------------------------------------- */
+
+/* The Files view's card, not this view's old caption line: an empty plot is the
+   whole pane, and the three ranks are what let it explain itself instead of
+   reading as a panel that failed to load. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 420px;
+  margin: 48px auto;
+  padding: 24px 20px;
+  gap: 6px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+  text-align: center;
+}
+
+.emptyGlyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 4px;
+  border-radius: 20px;
+  color: var(--dsw-alias-label-tertiary);
+  background: var(--dsw-alias-bg-base);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+}
+
+.emptyBody {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.emptyHint {
+  margin: 4px 0 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxxs-11);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Density and motion ---------------------------------------------------- */
+
+@container waterfall-plot (max-width: 620px) {
+  .spanColumn {
+    width: 132px;
+  }
+
+  .startColumn {
+    width: 56px;
+  }
+
+  .durationColumn {
+    width: 62px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .table tbody tr[data-open='true'] .bar {
+    animation: waterfallBreathe 1.8s var(--ds-ease-in-out) infinite;
+  }
+}
+
+@keyframes waterfallBreathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.62;
+  }
+}

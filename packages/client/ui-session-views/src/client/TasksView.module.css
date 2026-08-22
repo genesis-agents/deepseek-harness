@@ -1,0 +1,626 @@
+/* Tasks view: one full-height panel with exactly one scroller. The todo ladder
+   is the primary surface and keeps the trajectory row rhythm (30px rows,
+   0 8px padding) so a task row scans at the same cadence as a trajectory row;
+   plan / goal / jobs are equal-weight facet cards under it. The pane owns the
+   container query and the composer clearance, mirroring ui-trajectory's
+   views.module.css — the view opts into the composer overlay, so nothing
+   above it reserves the composer's height. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-1);
+
+  /* ConversationRoot's seat observer publishes the live composer height. */
+  --dsh-tasks-bottom-clearance: calc(var(--dsh-composer-height, 152px) + 16px);
+}
+
+/* Header sits outside the scroller rather than sticking inside it: it carries
+   the live agent state, which must stay legible while the pane is scrolled. */
+.header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  height: 42px;
+  padding: 0 16px;
+  gap: 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.headerIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.headerTitle {
+  flex: none;
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+}
+
+/* The scope note is load-bearing copy, not decoration: the todo projection is
+   cleared on the next turn/start, so an empty list is the steady state. */
+.headerScope {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerState {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.pane {
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: var(--dsh-tasks-bottom-clearance, 0px);
+  container: tasks-pane / inline-size;
+}
+
+/* Same centred lane as the chat and trajectory content columns. */
+.lane {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  gap: 14px;
+}
+
+/* The agent blocked on a human is the most actionable state on the screen, so
+   it gets the one warn-toned band above everything the model merely planned. */
+.banner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: 0 10px;
+  gap: 8px;
+  border-radius: 6px;
+  color: var(--dsw-alias-state-warn-label);
+  background: var(--dsw-alias-state-warn-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.bannerIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.bannerText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progressHead {
+  display: flex;
+  align-items: center;
+  min-height: 20px;
+  gap: 8px;
+}
+
+.progressCount {
+  flex: none;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressBreakdown {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Stacked meter as a three-column grid in `fr` units: the counts themselves
+   are the track definition, so a zero bucket collapses to nothing without a
+   rounding pass and the three segments always sum to the full width. */
+.progressTrack {
+  display: grid;
+  grid-template-columns:
+    var(--tasks-progress-done, 0fr)
+    var(--tasks-progress-active, 0fr)
+    var(--tasks-progress-pending, 0fr);
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.progressDone {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.progressActive {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.progressPending {
+  background: color-mix(in srgb, var(--dsw-alias-label-caption) 45%, transparent);
+}
+
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.group {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px;
+  gap: 6px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+.groupLabel {
+  flex: none;
+}
+
+.groupCount {
+  flex: none;
+  color: var(--dsw-alias-label-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+.groupRule {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1px;
+  background: var(--dsw-alias-border-l1);
+}
+
+.todoList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todoRow {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 0 8px;
+  gap: 10px;
+  border-radius: 4px;
+  transition: background-color 120ms var(--ds-ease-in-out);
+}
+
+/* Hover is a scan aid on rows that are not clickable; the active row already
+   owns a fill, so it is excluded exactly like the selected trajectory row. */
+.todoRow:not([data-status='in_progress']):hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.todoRow[data-status='in_progress'] {
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+.todoMarker {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* StateDot's union is done/warning/ongoing/error — it has no unstarted member,
+   and borrowing `warning` would paint every un-started task amber. The pending
+   marker is drawn here instead, on the dot's own 10px grid so all three row
+   kinds share one optical centre. */
+.pendingRing {
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--dsw-alias-label-caption);
+  border-radius: 50%;
+}
+
+.todoText {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todoRow[data-status='pending'] .todoText {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.todoRow[data-status='completed'] .todoText {
+  color: var(--dsw-alias-label-tertiary);
+  text-decoration: line-through;
+}
+
+.facets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+/* Jobs carry a command line plus the trailing metric lane, so they take the
+   full row while plan and goal pair up beside each other. */
+.cardWide {
+  grid-column: 1 / -1;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 36px;
+  padding: 0 12px;
+  gap: 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.cardIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.cardTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-strong-13);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardBadge {
+  flex: none;
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 8px;
+  color: var(--dsw-alias-label-secondary);
+  font: var(--dsw-font-xs-13);
+}
+
+/* A body hosting a hairline-separated list drops most of its own padding so
+   the row rules read as one ledger instead of a floating stack. */
+.cardBodyFlush {
+  padding: 2px 12px 6px;
+  gap: 0;
+}
+
+/* Semantic status chip. Pill draws exactly one neutral fill by design, and
+   recolouring it from the outside would break its "callers position; this
+   component draws" contract — a phase that can be blocked needs a tone ladder
+   of its own, so this one is drawn here and Pill keeps the neutral chips. */
+.statusChip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 9px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-module-platform);
+  font: var(--dsw-font-xxxs-11);
+  white-space: nowrap;
+}
+
+.statusChip[data-tone='active'] {
+  color: var(--dsw-alias-state-business-primary);
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+.statusChip[data-tone='paused'] {
+  color: var(--dsw-alias-state-warn-label);
+  background: var(--dsw-alias-state-warn-tertiary);
+}
+
+/* No `state-error-tertiary` alias exists, so the soft error fill is mixed off
+   the primary rather than inventing a token. */
+.statusChip[data-tone='blocked'] {
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 14%, transparent);
+}
+
+.statusChip[data-tone='complete'] {
+  color: var(--dsw-alias-state-success-primary);
+  background: var(--dsw-alias-state-success-tertiary);
+}
+
+.planState {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  gap: 8px;
+}
+
+
+.planDesc {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* An objective is a sentence, not a row: three lines, then clip. */
+.goalObjective {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.goalRounds {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  gap: 8px;
+}
+
+.goalRoundsLabel {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+}
+
+.goalRoundsTrack {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.goalRoundsFill {
+  width: var(--tasks-goal-rounds, 0%);
+  height: 100%;
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.goalBlocked {
+  display: flex;
+  align-items: flex-start;
+  padding: 8px;
+  gap: 6px;
+  border-radius: 6px;
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 12%, transparent);
+  font: var(--dsw-font-xxs-12);
+}
+
+.goalBlockedIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.goalBlockedText {
+  min-width: 0;
+  margin: 0;
+}
+
+.jobList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Trailing metric lane, identical on every job row: 76 + 64 + 2x10 = 160. */
+.jobRow {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 30px;
+  padding: 0 4px;
+  gap: 10px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  transition: background-color 120ms var(--ds-ease-in-out);
+}
+
+.jobList .jobRow:last-child {
+  border-bottom: 0;
+}
+
+/* The job row is the tooltip anchor, so hover marks which row the bubble is
+   describing. Unlike a todo row it is also a tab stop, because the bubble's
+   text — the full command plus its settle detail — exists nowhere else on this
+   screen. The ring is an outline at a negative offset rather than the
+   trajectory table's inset box-shadow: nothing clips this row, and the Files
+   rows next door already use the outline form. */
+.jobRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.jobRow:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.jobMarker {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+}
+
+/* A job label is a producer-supplied command line — machine text, so it takes
+   the code face rather than the UI ramp. */
+.jobLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  font: 12px/19px var(--ds-font-family-code);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jobKind {
+  flex: none;
+}
+
+.jobStatus {
+  flex: none;
+  width: 76px;
+  color: var(--dsw-alias-label-tertiary);
+  font: var(--dsw-font-xxs-12);
+  text-align: right;
+}
+
+.jobElapsed {
+  flex: none;
+  width: 64px;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxs-12);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 16px 12px;
+  gap: 8px;
+  text-align: center;
+}
+
+/* The todo ladder is the view's subject, so its empty state is a placeholder
+   the eye lands on rather than a line of grey text under a heading. */
+.emptyPrimary {
+  min-height: 148px;
+  border: 1px dashed var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+
+.emptyGlyph {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  color: var(--dsw-alias-label-caption);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.emptyText {
+  max-width: 340px;
+  margin: 0;
+  color: var(--dsw-alias-label-caption);
+  font: var(--dsw-font-xxs-12);
+}
+
+/* Density follows the pane's width, not the viewport's: the view sits beside a
+   resizable side panel, so the facet pair folds on the container. */
+@container tasks-pane (max-width: 620px) {
+  .facets {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .jobStatus {
+    width: 60px;
+  }
+
+  .jobElapsed {
+    width: 52px;
+  }
+}
+
+/* Screen-reader-only label, defined here rather than imported from
+   ui-conversation's chat/accessibility.module.css: a CSS module has no public
+   subpath and the class-name hash is per-bundle, so the rule has to be local.
+   Six other client packages carry their own copy for the same reason. */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
